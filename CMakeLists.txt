@@ -16,7 +16,7 @@ set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 add_library(gemm_kernels STATIC src/kernels.cu)
 target_include_directories(gemm_kernels PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_compile_options(gemm_kernels PRIVATE
-  $<$<COMPILE_LANGUAGE:CUDA>:--lineinfo>
+  $<$<COMPILE_LANGUAGE:CUDA>:-lineinfo>
 )
 set_target_properties(gemm_kernels PROPERTIES
   CUDA_SEPARABLE_COMPILATION ON
@@ -31,7 +31,7 @@ target_link_libraries(gemm_benchmark PRIVATE
   CUDA::cublas
 )
 target_compile_options(gemm_benchmark PRIVATE
-  $<$<COMPILE_LANGUAGE:CUDA>:--lineinfo>
+  $<$<COMPILE_LANGUAGE:CUDA>:-lineinfo>
 )
 
 include(CTest)
