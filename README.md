@@ -34,7 +34,7 @@ For aligned shapes, a 256-thread block computes a 128×128 output tile. Each thr
 
 - NVIDIA GPU with compute capability 8.0 or newer recommended
 - CUDA Toolkit 12.x
-- CMake 3.24+
+- CMake 3.22+
 - C++17 compiler
 
 The default build emits SM80, SM86 and SM89 code. Override `CMAKE_CUDA_ARCHITECTURES` for another GPU.
