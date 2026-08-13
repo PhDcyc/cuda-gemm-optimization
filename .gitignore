@@ -37,5 +37,13 @@
 *.out
 *.app
 
+# Project-local build and editor artifacts
+build/
+cmake-build-*/
+.cache/
+.DS_Store
+.vscode/
+.idea/
+
 # debug information files
 *.dwo
