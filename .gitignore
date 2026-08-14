@@ -39,6 +39,7 @@
 
 # Project-local build and editor artifacts
 build/
+__pycache__/
 cmake-build-*/
 .cache/
 .DS_Store

@@ -1,5 +1,9 @@
 # CUDA GEMM Optimization
 
+[![CUDA build](https://github.com/PhDcyc/cuda-gemm-optimization/actions/workflows/ci.yml/badge.svg)](https://github.com/PhDcyc/cuda-gemm-optimization/actions/workflows/ci.yml)
+![CUDA](https://img.shields.io/badge/CUDA-SM80%20%7C%20SM86%20%7C%20SM89-76B900?logo=nvidia&logoColor=white)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 A correctness-first CUDA SGEMM laboratory that shows how a row-major FP32 matrix multiplication evolves from one-output-per-thread code into a vectorized, register-tiled kernel. Every custom kernel is checked against a pedantic FP32 cuBLAS reference before its performance number is accepted.
 
 > 中文简介：这是一个面向 AI Infra 学习与作品集展示的 CUDA GEMM 项目。重点不是给出脱离环境的“峰值数字”，而是把正确性、优化路径、benchmark 方法和硬件相关结果分开记录。
@@ -17,6 +21,17 @@ The original repository contained three standalone square-matrix examples. The c
 
 The benchmark reports **GFLOP/s**, not “FLOPs,” and never treats an unvalidated kernel result as meaningful performance evidence.
 
+## Evidence status
+
+| Evidence | Status |
+|---|---|
+| SM80/SM86/SM89 compilation | GitHub CI verified |
+| Arbitrary-shape validation path | Implemented against pedantic FP32 cuBLAS |
+| RTX 4090 runtime sweep | Pending a dedicated SM89 benchmark host |
+| Nsight Compute counters | Planned after the first validated hardware sweep |
+
+No throughput number is committed until the executing GPU, shape, path, timing configuration and numerical error are recorded together.
+
 ## Register-tiled data flow
 
 ```mermaid
@@ -33,7 +48,7 @@ For aligned shapes, a 256-thread block computes a 128×128 output tile. Each thr
 ## Requirements
 
 - NVIDIA GPU with compute capability 8.0 or newer recommended
-- CUDA Toolkit 12.x
+- CUDA Toolkit 11.8 or newer
 - CMake 3.22+
 - C++17 compiler
 
