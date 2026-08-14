@@ -54,6 +54,13 @@ For aligned shapes, a 256-thread block computes a 128×128 output tile. Each thr
 
 The default build emits SM80, SM86 and SM89 code. Override `CMAKE_CUDA_ARCHITECTURES` for another GPU.
 
+For an RTX 4090, the checked-in preset keeps the build reproducible and compiles only SM89 code:
+
+```bash
+cmake --preset release-sm89
+cmake --build --preset release-sm89
+```
+
 ## Build
 
 ```bash

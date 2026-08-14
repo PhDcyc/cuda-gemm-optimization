@@ -1,0 +1,36 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 22,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "release-sm89",
+      "displayName": "Release for NVIDIA Ada (SM89)",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build/release-sm89",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_CUDA_ARCHITECTURES": "89"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "release-sm89",
+      "configurePreset": "release-sm89",
+      "jobs": 2
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "release-sm89",
+      "configurePreset": "release-sm89",
+      "output": {
+        "outputOnFailure": true
+      }
+    }
+  ]
+}
