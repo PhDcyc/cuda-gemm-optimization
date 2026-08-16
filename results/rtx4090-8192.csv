@@ -1,0 +1,5 @@
+gpu,compute_capability,m,n,k,kernel,path,time_ms,gflops,relative_to_cublas,max_abs_error,max_rel_error,mismatches,passed
+"NVIDIA GeForce RTX 4090",8.9,8192,8192,8192,register,vectorized,26.699009,41181.739374,0.788133,0.000839,349.507233,0,true
+"NVIDIA GeForce RTX 4090",8.9,8192,8192,8192,cp-async,vectorized,26.622919,41299.439192,0.790386,0.000839,349.507233,0,true
+"NVIDIA GeForce RTX 4090",8.9,8192,8192,8192,wmma-bf16,tensor-core,29.378708,37425.459011,0.716246,0.359240,621189.437500,0,true
+"NVIDIA GeForce RTX 4090",8.9,8192,8192,8192,cublas,library,21.042377,52252.252829,1.000000,0.000000,0.000000,0,true

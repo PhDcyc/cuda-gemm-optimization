@@ -61,7 +61,8 @@ void print_help(const char* executable) {
         << "  --m INT                 Rows of A and C (default: 1024)\n"
         << "  --n INT                 Columns of B and C (default: 1024)\n"
         << "  --k INT                 Reduction dimension (default: 1024)\n"
-        << "  --kernel LIST           Comma-separated naive,tiled,register,cublas,all\n"
+        << "  --kernel LIST           Comma-separated naive,tiled,register,cp-async,"
+                                   "wmma-bf16,cublas,all\n"
         << "                          (default: register,cublas)\n"
         << "  --warmup INT            Warm-up launches (default: 5)\n"
         << "  --iterations INT        Timed launches (default: 20)\n"
@@ -84,13 +85,13 @@ int parse_positive_int(const std::string& value, const char* flag) {
 
 std::vector<std::string> split_kernels(const std::string& value) {
     if (value == "all") {
-        return {"naive", "tiled", "register", "cublas"};
+        return {"naive", "tiled", "register", "cp-async", "wmma-bf16", "cublas"};
     }
     std::vector<std::string> kernels;
     std::stringstream stream(value);
     for (std::string kernel; std::getline(stream, kernel, ',');) {
         if (kernel != "naive" && kernel != "tiled" && kernel != "register" &&
-            kernel != "cublas") {
+            kernel != "cp-async" && kernel != "wmma-bf16" && kernel != "cublas") {
             throw std::invalid_argument("unknown kernel: " + kernel);
         }
         if (std::find(kernels.begin(), kernels.end(), kernel) == kernels.end()) {
@@ -403,6 +404,32 @@ int main(int argc, char** argv) {
                     },
                     options.warmup,
                     options.iterations);
+            } else if (kernel_name == "wmma-bf16") {
+                if (options.m % 128 != 0 || options.n % 16 != 0 || options.k % 16 != 0) {
+                    throw std::runtime_error(
+                        "wmma-bf16 requires M multiple of 128, N multiple of 16, "
+                        "and K multiple of 16");
+                }
+                result.path = "tensor-core";
+                const std::size_t a_elements = static_cast<std::size_t>(options.m) * options.k;
+                const std::size_t b_elements = static_cast<std::size_t>(options.k) * options.n;
+                DeviceBuffer<__nv_bfloat16> bf16_a(a_elements);
+                DeviceBuffer<__nv_bfloat16> bf16_b(b_elements);
+                gemm::convert_fp32_to_bf16(device_a.get(), bf16_a.get(), a_elements);
+                gemm::convert_fp32_to_bf16(device_b.get(), bf16_b.get(), b_elements);
+                CUDA_CHECK(cudaDeviceSynchronize());
+
+                result.milliseconds = time_launch(
+                    [&]() {
+                        gemm::launch_wmma_bf16(bf16_a.get(),
+                                               bf16_b.get(),
+                                               device_c.get(),
+                                               options.m,
+                                               options.n,
+                                               options.k);
+                    },
+                    options.warmup,
+                    options.iterations);
             } else {
                 const gemm::KernelKind kind = gemm::parse_kernel(kernel_name);
                 result.path = gemm::uses_vectorized_fast_path(
@@ -430,10 +457,23 @@ int main(int argc, char** argv) {
                                       device_c.get(),
                                       device_c.bytes(),
                                       cudaMemcpyDeviceToHost));
-                result.validation = validate(host_actual,
-                                             host_reference,
-                                             options.absolute_tolerance,
-                                             options.relative_tolerance);
+                // BF16 has an 8-bit mantissa (relative rounding ~0.4%).  A
+                // K-length reduction accumulates that error, so the Tensor Core
+                // path is validated against a wider tolerance than the FP32
+                // kernels.  The FP32 kernels keep the strict default tolerance.
+                if (kernel_name == "wmma-bf16") {
+                    constexpr float kBf16AbsoluteTolerance = 0.5F;
+                    constexpr float kBf16RelativeTolerance = 5.0e-2F;
+                    result.validation = validate(host_actual,
+                                                 host_reference,
+                                                 kBf16AbsoluteTolerance,
+                                                 kBf16RelativeTolerance);
+                } else {
+                    result.validation = validate(host_actual,
+                                                 host_reference,
+                                                 options.absolute_tolerance,
+                                                 options.relative_tolerance);
+                }
             }
             results.push_back(std::move(result));
         }

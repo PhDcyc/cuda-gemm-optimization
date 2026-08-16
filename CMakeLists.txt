@@ -50,4 +50,12 @@ if(BUILD_TESTING AND GEMM_ENABLE_GPU_TESTS)
     NAME correctness_fast_path
     COMMAND gemm_benchmark --m 512 --n 512 --k 512 --kernel register --warmup 1 --iterations 2
   )
+  add_test(
+    NAME correctness_cp_async
+    COMMAND gemm_benchmark --m 1024 --n 1024 --k 1024 --kernel cp-async --warmup 1 --iterations 2
+  )
+  add_test(
+    NAME correctness_wmma_bf16
+    COMMAND gemm_benchmark --m 1024 --n 1024 --k 1024 --kernel wmma-bf16 --warmup 1 --iterations 2
+  )
 endif()

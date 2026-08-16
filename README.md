@@ -4,19 +4,21 @@
 ![CUDA](https://img.shields.io/badge/CUDA-SM80%20%7C%20SM86%20%7C%20SM89-76B900?logo=nvidia&logoColor=white)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-A correctness-first CUDA SGEMM laboratory that shows how a row-major FP32 matrix multiplication evolves from one-output-per-thread code into a vectorized, register-tiled kernel. Every custom kernel is checked against a pedantic FP32 cuBLAS reference before its performance number is accepted.
+A correctness-first CUDA GEMM laboratory that shows how a row-major FP32 matrix multiplication evolves from one-output-per-thread code into a vectorized, register-tiled kernel, then onto `cp.async` multi-stage pipelining and a WMMA BF16 Tensor Core path. Every custom kernel is checked against a pedantic FP32 cuBLAS reference before its performance number is accepted.
 
 > 中文简介：这是一个面向 AI Infra 学习与作品集展示的 CUDA GEMM 项目。重点不是给出脱离环境的“峰值数字”，而是把正确性、优化路径、benchmark 方法和硬件相关结果分开记录。
 
 ## What changed
 
-The original repository contained three standalone square-matrix examples. The current version fixes incomplete tile loads and hard-coded dimensions, then builds one reproducible benchmark around four comparable implementations:
+The original repository contained three standalone square-matrix examples. The current version fixes incomplete tile loads and hard-coded dimensions, then builds one reproducible benchmark around six comparable implementations:
 
 | Kernel | Main idea | Shape support |
 |---|---|---|
 | `naive` | One thread computes one output | Arbitrary positive M/N/K |
 | `tiled` | 16×16 cooperative shared-memory tiles | Arbitrary positive M/N/K |
 | `register` | 128×128×8 block tile, 8×8/thread, double-buffered shared memory | Vectorized aligned fast path plus edge-safe fallback |
+| `cp-async` | 128×128×8 with a 4-stage `cp.async` pipeline (SM80+) | Aligned M/N=128k, K=8k |
+| `wmma-bf16` | 16×16×16 BF16 Tensor Core outer products with a shared B tile | M=128k, N=16k, K=16k |
 | `cublas` | Pedantic FP32 library reference and performance baseline | Arbitrary positive M/N/K |
 
 The benchmark reports **GFLOP/s**, not “FLOPs,” and never treats an unvalidated kernel result as meaningful performance evidence.
@@ -28,22 +30,43 @@ The benchmark reports **GFLOP/s**, not “FLOPs,” and never treats an unvalida
 | SM80/SM86/SM89 compilation | GitHub CI verified |
 | Arbitrary-shape validation path | Verified on RTX 4090 against pedantic FP32 cuBLAS |
 | RTX 4090 runtime sweep | Measured on a real RTX 4090 (SM 89, see below) |
-| Nsight Compute counters | Planned after the first validated hardware sweep |
+| Nsight Compute counters | Blocked by container perf-counter permission (`ERR_NVGPUCTRPERM`); `ptxas -v` register/smem data recorded instead |
 
 ### RTX 4090 measurements
 
-Checked-in results: [`results/rtx4090-4096.csv`](results/rtx4090-4096.csv) and [`results/rtx4090-correctness.csv`](results/rtx4090-correctness.csv), produced by `gemm_benchmark` on an NVIDIA GeForce RTX 4090 (compute capability 8.9, driver 580.82.07).
+Checked-in results: [`results/rtx4090-4096.csv`](results/rtx4090-4096.csv), [`results/rtx4090-8192.csv`](results/rtx4090-8192.csv) and [`results/rtx4090-correctness.csv`](results/rtx4090-correctness.csv), produced by `gemm_benchmark` on an NVIDIA GeForce RTX 4090 (compute capability 8.9, driver 580.82.07).
 
 4096×4096×4096 sweep (warmup=10, iterations=50):
 
 | Kernel | Path | Time | GFLOP/s | vs cuBLAS |
 |---|---:|---:|---:|---:|
-| naive | edge-safe | 25.869 ms | 5,313 | 0.108× |
-| tiled | edge-safe | 29.257 ms | 4,698 | 0.095× |
-| register | vectorized | 3.362 ms | 40,879 | 0.828× |
-| cuBLAS | library | 2.784 ms | 49,365 | 1.000× |
+| naive | edge-safe | 25.056 ms | 5,485 | 0.111× |
+| tiled | edge-safe | 28.158 ms | 4,881 | 0.099× |
+| register | vectorized | 3.298 ms | 41,677 | 0.846× |
+| cp-async | vectorized | 3.328 ms | 41,301 | 0.838× |
+| wmma-bf16 | tensor-core | 3.169 ms | 43,377 | 0.880× |
+| cuBLAS | library | 2.789 ms | 49,283 | 1.000× |
 
-Arbitrary-shape correctness sweep (257×263×269, edge-safe paths): all four kernels matched the pedantic FP32 cuBLAS reference (max abs err ≤ 1.5e-05, zero mismatches, `passed=true`).
+8192×8192×8192 sweep (warmup=5, iterations=20):
+
+| Kernel | Path | Time | GFLOP/s | vs cuBLAS |
+|---|---:|---:|---:|---:|
+| register | vectorized | 26.699 ms | 41,182 | 0.788× |
+| cp-async | vectorized | 26.623 ms | 41,299 | 0.790× |
+| wmma-bf16 | tensor-core | 29.379 ms | 37,425 | 0.716× |
+| cuBLAS | library | 21.042 ms | 52,252 | 1.000× |
+
+Arbitrary-shape correctness sweep (257×263×269, edge-safe paths): all four FP32 kernels matched the pedantic FP32 cuBLAS reference (max abs err ≤ 1.5e-05, zero mismatches, `passed=true`). The `wmma-bf16` path is validated against a BF16-aware tolerance (abs 0.5, rel 5e-2) because its 8-bit mantissa introduces a rounding error that accumulates over a 4096-long reduction.
+
+Compile-time resource use from `ptxas -v` for SM89:
+
+| Kernel | Registers/thread | Shared memory | Spills |
+|---|---:|---:|---:|
+| naive | 40 | 0 B | 0 |
+| tiled | 36 | 2,048 B | 0 |
+| register | 127 | 16,384 B | 0 |
+| cp-async | 128 | 40,960 B | 0 |
+| wmma-bf16 | 42 | 512 B | 0 |
 
 No throughput number is committed until the executing GPU, shape, path, timing configuration and numerical error are recorded together.
 
@@ -150,7 +173,7 @@ See [Optimization notes](docs/optimization-notes.md) for the reasoning and limit
 
 ```text
 include/gemm/          Public launch API and CUDA/cuBLAS error handling
-src/kernels.cu         Naive, tiled and register-tiled CUDA kernels
+src/kernels.cu         Naive, tiled, register-tiled, cp.async and WMMA BF16 kernels
 src/benchmark.cu       CLI, cuBLAS reference, timing, validation and CSV output
 tools/run_sweep.py     Repeatable multi-shape benchmark driver
 docs/                  Optimization and measurement notes
@@ -169,12 +192,17 @@ ctest --test-dir build --output-on-failure
 
 ## Scope and next steps
 
-This repository studies FP32 CUDA-core SGEMM. It is not intended to beat Tensor Core cuBLAS on modern accelerators. Natural extensions are:
+This repository studies FP32 CUDA-core SGEMM alongside a BF16 Tensor Core path. It is not intended to beat Tensor Core cuBLAS on modern accelerators. Completed extensions:
 
-- TF32/BF16 Tensor Core kernels via WMMA or CUTLASS/CuTe
-- `cp.async` multi-stage pipelines for SM80+
+- ✅ BF16 Tensor Core kernel via WMMA (shared B tile, no CUTLASS dependency)
+- ✅ `cp.async` 4-stage pipeline for SM80+
+- ✅ RTX 4090 runtime sweep at 4096³ and 8192³
+
+Remaining natural extensions:
+
 - Split-K and grouped GEMM for inference workloads
-- Nsight Compute reports for occupancy, bank conflicts and memory transactions
+- CUTLASS/CuTe-based Tensor Core kernels with multi-stage software pipelines
+- Nsight Compute reports (occupancy, bank conflicts, memory transactions) on a host with perf-counter access
 
 ## License
 
