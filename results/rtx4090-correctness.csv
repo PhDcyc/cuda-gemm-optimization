@@ -1,0 +1,5 @@
+gpu,compute_capability,m,n,k,kernel,path,time_ms,gflops,relative_to_cublas,max_abs_error,max_rel_error,mismatches,passed
+"NVIDIA GeForce RTX 4090",8.9,257,263,269,naive,edge-safe,0.014739,2467.159468,0.497612,0.000015,0.059868,0,true
+"NVIDIA GeForce RTX 4090",8.9,257,263,269,tiled,edge-safe,0.016365,2222.083888,0.448181,0.000015,0.059868,0,true
+"NVIDIA GeForce RTX 4090",8.9,257,263,269,register,edge-safe,0.039322,924.783242,0.186523,0.000015,0.059868,0,true
+"NVIDIA GeForce RTX 4090",8.9,257,263,269,cublas,library,0.007334,4958.000403,1.000000,0.000000,0.000000,0,true

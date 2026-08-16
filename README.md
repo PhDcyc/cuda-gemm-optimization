@@ -26,9 +26,24 @@ The benchmark reports **GFLOP/s**, not “FLOPs,” and never treats an unvalida
 | Evidence | Status |
 |---|---|
 | SM80/SM86/SM89 compilation | GitHub CI verified |
-| Arbitrary-shape validation path | Implemented against pedantic FP32 cuBLAS |
-| RTX 4090 runtime sweep | Pending a dedicated SM89 benchmark host |
+| Arbitrary-shape validation path | Verified on RTX 4090 against pedantic FP32 cuBLAS |
+| RTX 4090 runtime sweep | Measured on a real RTX 4090 (SM 89, see below) |
 | Nsight Compute counters | Planned after the first validated hardware sweep |
+
+### RTX 4090 measurements
+
+Checked-in results: [`results/rtx4090-4096.csv`](results/rtx4090-4096.csv) and [`results/rtx4090-correctness.csv`](results/rtx4090-correctness.csv), produced by `gemm_benchmark` on an NVIDIA GeForce RTX 4090 (compute capability 8.9, driver 580.82.07).
+
+4096×4096×4096 sweep (warmup=10, iterations=50):
+
+| Kernel | Path | Time | GFLOP/s | vs cuBLAS |
+|---|---:|---:|---:|---:|
+| naive | edge-safe | 25.869 ms | 5,313 | 0.108× |
+| tiled | edge-safe | 29.257 ms | 4,698 | 0.095× |
+| register | vectorized | 3.362 ms | 40,879 | 0.828× |
+| cuBLAS | library | 2.784 ms | 49,365 | 1.000× |
+
+Arbitrary-shape correctness sweep (257×263×269, edge-safe paths): all four kernels matched the pedantic FP32 cuBLAS reference (max abs err ≤ 1.5e-05, zero mismatches, `passed=true`).
 
 No throughput number is committed until the executing GPU, shape, path, timing configuration and numerical error are recorded together.
 
